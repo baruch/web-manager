@@ -13,12 +13,27 @@
  *  GNU Lesser Public License for more details.
  */
 using GLib;
+using Soup;
 
 namespace WebManager {
 	
 	class Deamon {
+		Soup.Server server;
+
+		private int do_default_handler(Soup.Message msg, GLib.HashTable<string, string>? query) {
+			string response_text = "<html><head><title>Default page</title></head><body><p>This is just the default page</p></body></html>";
+			msg.set_response("text/html", Soup.MemoryUse.COPY, response_text, response_text.len());
+			return KnownStatusCode.OK;
+		}
+
+		private void default_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
+			msg.set_status(do_default_handler(msg, query));
+		}
 
 		private void init() {
+			server = new Soup.Server(SERVER_PORT, 80);
+			server.add_handler("/", default_handler);
+			server.run_async();
 		}
 
 		private void uninit() {
