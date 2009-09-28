@@ -1,0 +1,10 @@
+Package: web-manager
+Version: 0.1
+Description: Manage the freerunner from a web interface
+Section: openmoko/applications
+Priority: optional
+Maintainer: <baruch@ev-en.org>
+Architecture: armv4t
+Homepage: http://baruch.ev-en.org/
+Depends: 
+Source: ${SRC}

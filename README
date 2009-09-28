@@ -1,0 +1,6 @@
+This daemon provides location information based on the GSM cell info, it uses
+the FreeSmartPhone.org infrastructure to get the GSM cell information.
+
+The daemon also collects information by using FSO and Gypsy to correlate GSM
+location information when the GPS is on and in this way automatically collects
+and uploads information for everyones benefit.
