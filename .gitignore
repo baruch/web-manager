@@ -21,3 +21,4 @@ stamp-*
 src/web-manager
 *.gir.vapi
 *.stamp
+data/web/web-manager
