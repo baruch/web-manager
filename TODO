@@ -13,5 +13,7 @@
     - Delete
     - Set directory (read from tangogps?)
   - Register with avahi
+  - Request and display USSD information
+  - Send SMS
 
 # vim:set sw=2 ts=2 et:
