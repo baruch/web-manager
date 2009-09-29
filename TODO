@@ -1,24 +1,17 @@
-* GPS position daemon
-  - Collect GSM locations
-    + Keep updated about GPS but do not force it to be on (depend on other logics or user to force it on)
-    + Every ten seconds check GPS status and if has fix, get GSM cell data and log it for cellhunter
-    - Smart recording of new cells and new locations around existing cells
-    - When detecting that there is network access
-      - Upload cellhunter data
-  - Position service
-    - Import
-      - from cellhunter
-      - from openbmap
-      - from opencellid
-    - Calculate
-      - Based on cell tower position
-        - Average of cell locations
-        - Weighted average of cell locations
-        - Smart propogation model
-      - Based on cell samples
-        - Intersection of boundary of cell detections
-          # Calculate a boundary polygon for the reception of a cell
-          # Calculate the intersection of all relevant boundaries
-        	# Find the center of the intersected polygon, give as solution
+- web-manager
+  - Generic file serving for webapp
+  - See phone status
+    - gsm
+      - Policy
+      - Current state on/off
+      - reception
+    - gps
+    - wifi
+  - set gprs connection sharing
+  - manage gpx tracks
+    - Download
+    - Delete
+    - Set directory (read from tangogps?)
+  - Register with avahi
 
 # vim:set sw=2 ts=2 et:
