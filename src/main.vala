@@ -19,9 +19,12 @@ namespace WebManager {
 	
 	class Deamon {
 		Soup.Server server;
+		RestAPI api;
+		static string api_prefix = "/api/1.0/";
 
-		private string simple_html(string title, string message) {
-			return "<html><head><title>%s</title></head><body><p>%s</p></body></html>".printf(title, message);
+		private void simple_html_response(Soup.Message msg, string title, string message) {
+			string response = "<html><head><title>%s</title></head><body><p>%s</p></body></html>".printf(title, message);
+			msg.set_response("text/html", Soup.MemoryUse.COPY, response, response.len());
 		}
 
 		private string mimetype_for_file(string path) {
@@ -35,10 +38,8 @@ namespace WebManager {
 		}
 
 		private int do_file_not_found(Soup.Message msg, string path) {
-			string response_text = simple_html("File not found", "Requsted file %s was not found".printf(path));
-			msg.set_response("text/html", Soup.MemoryUse.COPY, response_text, response_text.len());
+			simple_html_response(msg, "File not found", "Requsted file %s was not found".printf(path));
 			return KnownStatusCode.NOT_FOUND;
-
 		}
 
 		private int do_default_handler(Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
@@ -53,16 +54,15 @@ namespace WebManager {
 
 			string content;
 			size_t content_len;
-			string mimetype = mimetype_for_file(path);
 			try {
 				bool ret = fileobj.load_contents(null, out content, out content_len, null);
 				assert(ret == true);
 			} catch (GLib.Error e) {
-				content = simple_html("Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(path, e.code, e.message));
-				content_len = content.len();
-				mimetype = "text/html";
+				simple_html_response(msg, "Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(path, e.code, e.message));
+				return KnownStatusCode.NOT_FOUND;
 			}
 
+			string mimetype = mimetype_for_file(path);
 			msg.set_response(mimetype, Soup.MemoryUse.COPY, content, content_len);
 			return KnownStatusCode.OK;
 		}
@@ -71,9 +71,22 @@ namespace WebManager {
 			msg.set_status(do_default_handler(msg, path, query));
 		}
 
+		private void api_1_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
+			assert(api != null);
+			string api_path = path.substring(api_prefix.len());
+			if (api.process_message(server, msg, api_path, query))
+				return;
+
+			simple_html_response(msg, "Method unknown", "Unknown method called: %s".printf(path));
+			msg.set_status(KnownStatusCode.NOT_FOUND);
+		}
+
 		private void init() {
+			api = new RestAPI();
+
 			server = new Soup.Server(SERVER_PORT, 80);
 			server.add_handler("/", default_handler);
+			server.add_handler(api_prefix, api_1_handler);
 			server.run_async();
 		}
 

@@ -13,6 +13,7 @@ VALAFLAGS = \
 bin_PROGRAMS = web-manager
 
 web_manager_SOURCES = \
-	main.vala
+	main.vala \
+	rest_api.vala
 
 web_manager_LDADD = $(ALL_LIBS)
