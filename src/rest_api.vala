@@ -83,6 +83,7 @@ namespace WebManager {
 			last_msg.set_status(KnownStatusCode.OK);
 			string status_json = hashtable_to_json(status, ulong_keys, hex_ulong_keys);
 			last_msg.set_response("text/plain", Soup.MemoryUse.COPY, status_json, status_json.len());
+			last_msg = null;
 		}
 
 		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
