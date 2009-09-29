@@ -20,14 +20,55 @@ namespace WebManager {
 	class Deamon {
 		Soup.Server server;
 
-		private int do_default_handler(Soup.Message msg, GLib.HashTable<string, string>? query) {
-			string response_text = "<html><head><title>Default page</title></head><body><p>This is just the default page</p></body></html>";
+		private string simple_html(string title, string message) {
+			return "<html><head><title>%s</title></head><body><p>%s</p></body></html>".printf(title, message);
+		}
+
+		private string mimetype_for_file(string path) {
+			if (path.has_suffix(".html"))
+				return "text/html";
+			else if (path.has_suffix(".csS"))
+				return "text/css";
+			else if (path.has_suffix(".js"))
+				return "text/javascript";
+			return "text/plain";
+		}
+
+		private int do_file_not_found(Soup.Message msg, string path) {
+			string response_text = simple_html("File not found", "Requsted file %s was not found".printf(path));
 			msg.set_response("text/html", Soup.MemoryUse.COPY, response_text, response_text.len());
+			return KnownStatusCode.NOT_FOUND;
+
+		}
+
+		private int do_default_handler(Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
+			string concat_path;
+			if (path.has_suffix("/")) {
+				concat_path = path.concat("index.html");
+				path = concat_path;
+			}
+			File fileobj = File.new_for_path(".".concat(path));
+			if (!fileobj.query_exists(null))
+				return do_file_not_found(msg, path);
+
+			string content;
+			size_t content_len;
+			string mimetype = mimetype_for_file(path);
+			try {
+				bool ret = fileobj.load_contents(null, out content, out content_len, null);
+				assert(ret == true);
+			} catch (GLib.Error e) {
+				content = simple_html("Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(path, e.code, e.message));
+				content_len = content.len();
+				mimetype = "text/html";
+			}
+
+			msg.set_response(mimetype, Soup.MemoryUse.COPY, content, content_len);
 			return KnownStatusCode.OK;
 		}
 
 		private void default_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
-			msg.set_status(do_default_handler(msg, query));
+			msg.set_status(do_default_handler(msg, path, query));
 		}
 
 		private void init() {

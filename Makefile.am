@@ -12,6 +12,10 @@ gen-ChangeLog:
 	  mv $(distdir)/cl-t $(distdir)/ChangeLog;			\
 	fi
 
+dev:
+	cp src/web-manager data/web
+	rsync -e ssh -v --progress -a data/web/* moko:web-manager
+
 EXTRA_DIST = \
 	gitlog-to-changelog
 
