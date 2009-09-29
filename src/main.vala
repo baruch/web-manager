@@ -27,7 +27,7 @@ namespace WebManager {
 		private string mimetype_for_file(string path) {
 			if (path.has_suffix(".html"))
 				return "text/html";
-			else if (path.has_suffix(".csS"))
+			else if (path.has_suffix(".css"))
 				return "text/css";
 			else if (path.has_suffix(".js"))
 				return "text/javascript";
