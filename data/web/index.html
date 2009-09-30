@@ -14,13 +14,17 @@
 				refreshGSM();
 			}
 
+			function deleteGPX(item) {
+				alert('delete item ' + item);
+			}
+
 			function listGPX() {
 				$.getJSON("/api/1.0/gpx/list",
 					function(data){
 						$("#gpxlist").empty();
 						if (data.length > 0) {
 							$.each(data, function(i,item){
-								$("<li/>").text(item).appendTo("#gpxlist");
+								$("<li/>").append($("<a/>").attr('href','/api/1.0/gpx/item?item='+item).text(item)).append(' ').append($("<a/>").attr('href','#').click('deleteGPX('+item+')').text('Delete')).appendTo("#gpxlist");
 							});
 						} else {
 							$("<li/>").text("No gpx traces found").appendTo("#gpxlist");

@@ -16,6 +16,8 @@ using GLib;
 using Soup;
 
 namespace WebManager {
+	const string TANGOGPS_LOG_DIR = "/home/root/Maps/";
+
 	private string hashtable_to_json(HashTable<string, Value?>? h, List<string> ulong_keys, List<string> hex_ulong_keys) {
 		return_val_if_fail(h != null, "{}");
 
@@ -107,7 +109,7 @@ namespace WebManager {
 
 			string result = "[";
 			try {
-				var directory = File.new_for_path("/home/root/Maps/");
+				var directory = File.new_for_path(TANGOGPS_LOG_DIR);
 				var enumerator = directory.enumerate_children(FILE_ATTRIBUTE_STANDARD_NAME.concat(",",FILE_ATTRIBUTE_STANDARD_TYPE), 0, null);
 
 				FileInfo file_info;
@@ -140,6 +142,43 @@ namespace WebManager {
 		}
 	}
 
+	class GPXItem : APIAction {
+		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			return_val_if_fail(query != null, false);
+			string? filename = query.lookup("item");
+			return_val_if_fail(filename != null, false);
+
+			//TODO: need to sanitize filename, it must not begin with ../
+
+			var f = File.new_for_path(TANGOGPS_LOG_DIR + filename);
+			if (!f.query_exists(null)) {
+				// File not found, let the user know
+				msg.set_status(KnownStatusCode.NOT_FOUND);
+				var response = "File not found %s".printf(filename);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				return true;
+			}
+
+			try {
+				string contents;
+				string etag;
+				size_t len;
+				bool success = f.load_contents(null, out contents, out len, out etag);
+				assert(success);
+
+				debug("When loading content of file %s got etag %s size %lld", filename, etag, len);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, contents, contents.len());
+				msg.set_status(KnownStatusCode.OK);
+				return true;
+			} catch (GLib.Error e) {
+				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				var response = "Internal server error: %s".printf(e.message);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				return true;
+			}
+		}
+	}
+
 	class RestAPI : Object {
 		HashTable<string, APIAction> actions;
 
@@ -147,6 +186,7 @@ namespace WebManager {
 			actions = new HashTable<string, APIAction>(str_hash, str_equal);
 			actions.insert("gsm/status", new GSMSignalStrength());
 			actions.insert("gpx/list", new GPXList());
+			actions.insert("gpx/item", new GPXItem());
 		}
 
 		public bool process_message(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
