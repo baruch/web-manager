@@ -44,6 +44,9 @@ namespace WebManager {
 
 	abstract class APIAction : Object {
 		public abstract bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query);
+		public virtual bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			return false;
+		}
 	}
 
 	class GSMSignalStrength : APIAction {
@@ -177,6 +180,35 @@ namespace WebManager {
 				return true;
 			}
 		}
+
+		public override bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			return_val_if_fail(query != null, false);
+			string? filename = query.lookup("item");
+			return_val_if_fail(filename != null, false);
+			//TODO: need to sanitize filename, it must not begin with ../
+
+			var f = File.new_for_path(TANGOGPS_LOG_DIR + filename);
+			if (!f.query_exists(null)) {
+				// File not found, let the user know
+				msg.set_status(KnownStatusCode.NOT_FOUND);
+				var response = "File not found %s".printf(filename);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				return true;
+			}
+
+			try {
+				bool success = f.delete(null);
+				string contents = success.to_string();
+				msg.set_response("text/javascript", Soup.MemoryUse.COPY, contents, contents.len());
+				msg.set_status(KnownStatusCode.OK);
+				return true;
+			} catch (GLib.Error e) {
+				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				var response = "Internal server error: %s".printf(e.message);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				return true;
+			}
+		}
 	}
 
 	class RestAPI : Object {
@@ -196,15 +228,14 @@ namespace WebManager {
 				bool res = false;
 				if (msg.method == "GET")
 					res = action.act_get(server, msg, query);
+				else if (msg.method == "DELETE")
+					res = action.act_delete(server, msg, query);
 				else {
 					// Unknown method
 					msg.set_status(KnownStatusCode.METHOD_NOT_ALLOWED);
 					res = true;
 				}
 
-				if (res) {
-					msg.set_status(KnownStatusCode.OK);
-				}
 				return res;
 			}
 			return false;
