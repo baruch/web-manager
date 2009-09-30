@@ -10,7 +10,7 @@
   - set gprs connection sharing
     # There is no corresponding method to cancel the sharing...
   - manage gpx tracks
-    - Download
+    + Download
     - Delete
     - Set directory (read from tangogps?)
   - Register with avahi
