@@ -5,6 +5,6 @@ Section: openmoko/applications
 Priority: optional
 Maintainer: <baruch@ev-en.org>
 Architecture: armv4t
-Homepage: http://baruch.ev-en.org/
-Depends: 
+Homepage: http://wiki.github.com/baruch/web-manager
+Depends: dbus-glib-1, dbus-1, gthread-2.0, gio-2.0, libsoup-2.4
 Source: ${SRC}
