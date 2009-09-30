@@ -1,19 +1,24 @@
 - web-manager
-  - Generic file serving for webapp
+  + Generic file serving for webapp
   - See phone status
     - gsm
       - Policy
       - Current state on/off
-      - reception
+      + reception
     - gps
     - wifi
   - set gprs connection sharing
+    # There is no corresponding method to cancel the sharing...
   - manage gpx tracks
     - Download
     - Delete
     - Set directory (read from tangogps?)
   - Register with avahi
   - Request and display USSD information
-  - Send SMS
+  - SMS
+    - Get list of messages
+    - Display message
+    - Send message
+    - Tie it all as a usable SMS messaging app
 
 # vim:set sw=2 ts=2 et:
