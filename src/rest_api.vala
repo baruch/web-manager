@@ -101,12 +101,52 @@ namespace WebManager {
 		}
 	}
 
+	class GPXList : APIAction {
+		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			msg.set_status(KnownStatusCode.OK);
+
+			string result = "[";
+			try {
+				var directory = File.new_for_path("/home/root/Maps/");
+				var enumerator = directory.enumerate_children(FILE_ATTRIBUTE_STANDARD_NAME.concat(",",FILE_ATTRIBUTE_STANDARD_TYPE), 0, null);
+
+				FileInfo file_info;
+				bool first = true;
+				while ((file_info = enumerator.next_file(null)) != null) {
+					if (file_info.get_file_type() != FileType.REGULAR)
+						continue;
+
+					if (!file_info.get_name().has_suffix(".log"))
+						continue;
+
+					if (!first) {
+						result = result.concat(",\"", file_info.get_name(), "\"");
+					} else {
+						result = result.concat("\"", file_info.get_name(), "\"");
+						first = false;
+					}
+				}
+
+			} catch (Error e) {
+				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				result = "Error listing files: %s".printf(e.message);
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, result, result.len());
+				return true;
+			}
+
+			result = result.concat("]");
+			msg.set_response("text/javascript", Soup.MemoryUse.COPY, result, result.len());
+			return true;
+		}
+	}
+
 	class RestAPI : Object {
 		HashTable<string, APIAction> actions;
 
 		construct {
 			actions = new HashTable<string, APIAction>(str_hash, str_equal);
 			actions.insert("gsm/status", new GSMSignalStrength());
+			actions.insert("gpx/list", new GPXList());
 		}
 
 		public bool process_message(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query) {

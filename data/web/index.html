@@ -13,12 +13,32 @@
 			function refreshALL() {
 				refreshGSM();
 			}
+
+			function listGPX() {
+				$.getJSON("/api/1.0/gpx/list",
+					function(data){
+						$("#gpxlist").empty();
+						if (data.length > 0) {
+							$.each(data, function(i,item){
+								$("<li/>").text(item).appendTo("#gpxlist");
+							});
+						} else {
+							$("<li/>").text("No gpx traces found").appendTo("#gpxlist");
+						}
+					}
+				)
+			}
+
 			$(document).ready(refreshALL());
 		</script>
 	</head>
 	<body><p>Welcome to the web manager for the Neo Freerunner</p>
 		<ul><li>GSM: <span id="gsm">getting info...</span></li>
+			<li><a href="#refresh" onclick="refreshALL(); return false;">Refresh</a></li>
 		</ul>
-		<a href="#refresh" onclick="refreshALL(); return false;">Refresh</a>
+
+		<ul id="gpxlist">
+		</ul>
+		<a href="#" onclick="listGPX(); return false;">Load GPX List</a>
 	</body>
 </html>
