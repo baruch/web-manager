@@ -11,7 +11,7 @@
     # There is no corresponding method to cancel the sharing...
   - manage gpx tracks
     + Download
-    - Delete
+    + Delete
     - Set directory (read from tangogps?)
   - Register with avahi
   - Request and display USSD information
