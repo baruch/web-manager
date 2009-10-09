@@ -16,9 +16,13 @@ depcomp
 install-sh
 missing
 .deps
-*.in
+Makefile.in
+config.h.in
 stamp-*
 src/web-manager
 *.gir.vapi
 *.stamp
 data/web/web-manager
+tmp
+web-manager.control
+local-make-ipkg

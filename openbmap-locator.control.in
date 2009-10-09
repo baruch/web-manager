@@ -1,0 +1,10 @@
+Package: @PACKAGE_NAME@
+Version: @PACKAGE_VERSION@
+Description: Provide location based on GSM information
+Section: openmoko/applications
+Priority: optional
+Maintainer: @PACKAGE_BUGREPORT@
+Architecture: armv4t
+Homepage: @PACKAGE_URL@
+Depends: libdbus-glib-1-2, libdbus-1-3, libgthread-2.0-0, libsqlite3-0
+Source: @PACKAGE_URL@

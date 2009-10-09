@@ -1,0 +1,10 @@
+Package: @PACKAGE_NAME@
+Version: @PACKAGE_VERSION@
+Description: Manage the freerunner from a web interface
+Section: openmoko/applications
+Priority: optional
+Maintainer: @PACKAGE_BUGREPORT@
+Architecture: armv4t
+Homepage: @PACKAGE_URL@
+Depends: libdbus-glib-1-2, libdbus-1-3, libgthread-2.0-0
+Source: @PACKAGE_URL@
