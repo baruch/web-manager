@@ -49,7 +49,7 @@ namespace WebManager {
 				concat_path = path.concat("index.html");
 				path = concat_path;
 			}
-			File fileobj = File.new_for_path(".".concat(path));
+			File fileobj = File.new_for_path("/usr/share/web-manager/web/".concat(path));
 			if (!fileobj.query_exists(null))
 				return do_file_not_found(msg, path);
 
