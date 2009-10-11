@@ -2,6 +2,7 @@
 	<head>
 		<title>Welcome</title>
 		<script src="jquery-1.3.2.min.js"></script>
+		<script src="jquery.tools.min.js"></script>
 		<script>
 			function refreshGSM() {
 				$.getJSON("/api/1.0/gsm/status",
@@ -46,16 +47,39 @@
 				)
 			}
 
-			$(document).ready(refreshALL());
+			function init() {
+				$("ul.tabs").tabs("div.panes > div");
+				refreshALL();
+			}
+
+			$(document).ready(init);
 		</script>
+
+		<!-- tab styling -->
+		<link rel="stylesheet" type="text/css" href="tabs.css" />
 	</head>
-	<body><p>Welcome to the web manager for the Neo Freerunner</p>
-		<ul><li>GSM: <span id="gsm">getting info...</span></li>
-			<li><a href="#refresh" onclick="refreshALL(); return false;">Refresh</a></li>
+	<body>
+		<h1>FreeRunner Web Manager</h1>
+		<p>Control your FreeRunner from a web interface.</p>
+
+		<ul class="tabs">
+			<li><a href="#">Status</a></li>
+			<li><a href="#">GPX</a></li>
 		</ul>
 
-		<ul id="gpxlist">
-		</ul>
-		<a href="#" onclick="listGPX(); return false;">Load GPX List</a>
+		<div class="panes">
+			<!-- Status tab -->
+			<div>
+				<ul><li>GSM: <span id="gsm">getting info...</span></li>
+					<li><a href="#refresh" onclick="refreshALL(); return false;">Refresh</a></li>
+				</ul>
+			</div>
+
+			<!-- GPX tab -->
+			<div>
+				<ul id="gpxlist"></ul>
+				<a href="#" onclick="listGPX(); return false;">Load GPX List</a>
+			</div>
+		</div>
 	</body>
 </html>
