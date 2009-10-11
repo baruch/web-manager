@@ -27,18 +27,19 @@
 			function listGPX() {
 				$.getJSON("/api/1.0/gpx/list",
 					function(data){
-						$("#gpxlist").empty();
+						$("#gpx").empty();
 						if (data.length > 0) {
 							$.each(data, function(i,item){
-								var line = $("<li/>");
-								line.append($("<a/>").attr('href', '/api/1.0/gpx/item?item='+item.name).text(item.name));
-								line.append(' ');
-								line.append(item.size);
-								line.append(' ');
-								line.append($("<a/>").attr('href', '/api/1.0/gpx/item?format=gpx&item='+item.name).text("As GPX"));
-								line.append(' ');
-								line.append($("<a/>").attr('href','#').bind("click", item.name, deleteGPX).text('Delete'));
-								line.appendTo("#gpxlist");
+								var line = $("<tr/>");
+								line.append($("<td/>").append($("<a/>").attr('href', '/api/1.0/gpx/item?item='+item.name).text(item.name)));
+								line.append($("<td/>").append(item.size));
+
+								var td = $("<td/>");
+								td.append($("<a/>").attr('href', '/api/1.0/gpx/item?format=gpx&item='+item.name).text("As GPX"));
+								td.append(' ');
+								td.append($("<a/>").attr('href','#').bind("click", item.name, deleteGPX).text('Delete'));
+								line.append(td);
+								line.appendTo("#gpx");
 							});
 						} else {
 							$("<li/>").text("No gpx traces found").appendTo("#gpxlist");
@@ -86,7 +87,12 @@
 
 			<!-- GPX tab -->
 			<div>
-				<ul id="gpxlist"></ul>
+				<table>
+					<thead>
+						<th>Name</th><th>Size</th><th>Actions</th>
+					</thead>
+					<tbody id="gpx"><tr><td>Sample</td></tr></tbody>
+				</table>
 				<a href="#" onclick="listGPX(); return false;">Load GPX List</a>
 			</div>
 		</div>
