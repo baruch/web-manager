@@ -113,7 +113,7 @@ namespace WebManager {
 			string result = "[";
 			try {
 				var directory = File.new_for_path(TANGOGPS_LOG_DIR);
-				var enumerator = directory.enumerate_children(FILE_ATTRIBUTE_STANDARD_NAME.concat(",",FILE_ATTRIBUTE_STANDARD_TYPE), 0, null);
+				var enumerator = directory.enumerate_children(FILE_ATTRIBUTE_STANDARD_NAME.concat(",",FILE_ATTRIBUTE_STANDARD_TYPE,",",FILE_ATTRIBUTE_STANDARD_SIZE), 0, null);
 
 				FileInfo file_info;
 				bool first = true;
@@ -125,11 +125,15 @@ namespace WebManager {
 						continue;
 
 					if (!first) {
-						result = result.concat(",\"", file_info.get_name(), "\"");
-					} else {
-						result = result.concat("\"", file_info.get_name(), "\"");
-						first = false;
+						result = result.concat(",");
 					}
+
+					result = result.concat("{",
+									"\"name\":\"", file_info.get_name(), "\",",
+									"\"size\":", file_info.get_size().to_string(),
+								"}");
+
+					first = false;
 				}
 
 			} catch (Error e) {
