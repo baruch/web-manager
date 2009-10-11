@@ -16,6 +16,7 @@ using GLib;
 using Soup;
 
 namespace WebManager {
+	public bool dev;
 	
 	class Deamon {
 		DataOutputStream log_stream;
@@ -49,7 +50,12 @@ namespace WebManager {
 				concat_path = path.concat("index.html");
 				path = concat_path;
 			}
-			File fileobj = File.new_for_path("/usr/share/web-manager/web/".concat(path));
+			string basepath;
+			if (!dev)
+				basepath = "/usr/share/web-manager/web/";
+			else
+				basepath = ".";
+			File fileobj = File.new_for_path(basepath.concat(path));
 			if (!fileobj.query_exists(null))
 				return do_file_not_found(msg, path);
 
@@ -103,7 +109,12 @@ namespace WebManager {
 
 		private void init_log() {
 			try {
-				var log_file_stream = File.new_for_path("/var/log/web-manager.log").append_to(FileCreateFlags.NONE, null);
+				string logfile;
+				if (!dev)
+					logfile = "/var/log/web-manager.log";
+				else
+					logfile = "/var/log/web-manager-dev.log";
+				var log_file_stream = File.new_for_path(logfile).append_to(FileCreateFlags.NONE, null);
 				this.log_stream = new DataOutputStream(log_file_stream);
 
 				Log.set_default_handler(our_log_handler);
@@ -141,6 +152,13 @@ namespace WebManager {
 		}
 		
 		public static void main(string[] args) {
+			dev = false;
+			if (args.length > 1) {
+				if (args[1] == "--dev")
+					dev = true;
+			}
+
+
 			Deamon deamon = new Deamon();
 			deamon.run(args);
 		}
