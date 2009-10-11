@@ -150,10 +150,59 @@ namespace WebManager {
 	}
 
 	class GPXItem : APIAction {
+		private void gpx_append(Soup.MessageBody body, string data) {
+			body.append(Soup.MemoryUse.COPY, data, data.len());
+		}
+
+		private void write_gpx(Soup.MessageBody body, DataInputStream stream) {
+			gpx_append(body, """<?xml version="1.0" encoding="UTF-8"?>
+<gpx
+  version="1.0"
+  creator="GPSBabel - http://www.gpsbabel.org"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="http://www.topografix.com/GPX/1/0"
+  xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">
+""");
+
+			gpx_append(body, "<trk><trkseg>");
+			while (true) {
+				size_t len;
+				string line;
+				try {
+					line = stream.read_line(out len, null);
+				} catch (GLib.Error e) {
+					debug("Error while reading gpx logfile: %s", e.message);
+					break;
+				}
+				if (line == null)
+					break;
+				string[] csv = line._strip().split(",");
+				debug("Line length is %lu which split to %d parts", len, csv.length);
+				if (csv.length != 7)
+					continue;
+				gpx_append(body, """<trkpt lat="%s" lon="%s">
+  <ele>%s</ele>
+  <speed>%s</speed>
+  <course>%s</course>
+  <hdop>%s</hdop>
+  <time>%s</time>
+  <fix>3d</fix>
+</trkpt>""".printf(csv[0], csv[1], csv[2], csv[3], csv[4], csv[5], csv[6]));
+			}
+			gpx_append(body, "</trkseg></trk>");
+
+			gpx_append(body, "</gpx>");
+		}
+
 		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
 			return_val_if_fail(query != null, false);
 			string? filename = query.lookup("item");
 			return_val_if_fail(filename != null, false);
+
+			bool is_gpx = false;
+			string tmp = query.lookup("format");
+			if (tmp != null && tmp == "gpx")
+				is_gpx = true;
 
 			//TODO: need to sanitize filename, it must not begin with ../
 
@@ -167,14 +216,20 @@ namespace WebManager {
 			}
 
 			try {
-				string contents;
-				string etag;
-				size_t len;
-				bool success = f.load_contents(null, out contents, out len, out etag);
-				assert(success);
+				if (!is_gpx) {
+					string contents;
+					string etag;
+					size_t len;
+					bool success = f.load_contents(null, out contents, out len, out etag);
+					debug("When loading content of file %s got etag %s size %lld", filename, etag, len);
+					assert(success);
 
-				debug("When loading content of file %s got etag %s size %lld", filename, etag, len);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, contents, contents.len());
+					msg.set_response("text/plain", Soup.MemoryUse.COPY, contents, contents.len());
+				} else {
+					var stream = new DataInputStream(f.read(null));
+					write_gpx(msg.response_body, stream);
+				}
+
 				msg.set_status(KnownStatusCode.OK);
 				return true;
 			} catch (GLib.Error e) {

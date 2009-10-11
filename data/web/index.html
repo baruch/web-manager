@@ -34,6 +34,8 @@
 								line.append(' ');
 								line.append(item.size);
 								line.append(' ');
+								line.append($("<a/>").attr('href', '/api/1.0/gpx/item?format=gpx&item='+item.name).text("As GPX"));
+								line.append(' ');
 								line.append($("<a/>").attr('href','#').bind("click", item.name, deleteGPX).text('Delete'));
 								line.appendTo("#gpxlist");
 							});
