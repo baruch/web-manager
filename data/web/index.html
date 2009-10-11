@@ -48,7 +48,16 @@
 			}
 
 			function init() {
-				$("ul.tabs").tabs("div.panes > div");
+				$("ul.tabs").tabs("div.panes > div", {
+					onBeforeClick: function(event,  tabIndex) {
+						if (tabIndex == 0) {
+							refreshALL();
+						} else if (tabIndex == 1) {
+							listGPX();
+						}
+						return true;
+					}
+				});
 				refreshALL();
 			}
 
