@@ -29,7 +29,13 @@
 						$("#gpxlist").empty();
 						if (data.length > 0) {
 							$.each(data, function(i,item){
-								$("<li/>").append($("<a/>").attr('href','/api/1.0/gpx/item?item='+item.name).text(item.name)).append(' ').append(item.size).append(' ').append($("<a/>").attr('href','#').bind("click", item.name, deleteGPX).text('Delete')).appendTo("#gpxlist");
+								var line = $("<li/>");
+								line.append($("<a/>").attr('href', '/api/1.0/gpx/item?item='+item.name).text(item.name));
+								line.append(' ');
+								line.append(item.size);
+								line.append(' ');
+								line.append($("<a/>").attr('href','#').bind("click", item.name, deleteGPX).text('Delete'));
+								line.appendTo("#gpxlist");
 							});
 						} else {
 							$("<li/>").text("No gpx traces found").appendTo("#gpxlist");
