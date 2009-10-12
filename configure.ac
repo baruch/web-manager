@@ -1,4 +1,4 @@
-AC_INIT(web-manager, 0.1, baruch@ev-en.org, web-manager, http://wiki.github.com/baruch/web-manager)
+AC_INIT(web-manager, 0.1.1, baruch@ev-en.org, web-manager, http://wiki.github.com/baruch/web-manager)
 AC_PREREQ(2.52)
 AC_CONFIG_SRCDIR(configure.ac)
 AC_ISC_POSIX
