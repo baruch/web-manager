@@ -18,6 +18,10 @@ using Soup;
 namespace WebManager {
 	const string TANGOGPS_LOG_DIR = "/home/root/Maps/";
 
+	private string json_normalize(string key) {
+		return key.delimit(" -", '_');
+	}
+
 	private string hashtable_to_json(HashTable<string, Value?>? h, List<string> ulong_keys, List<string> hex_ulong_keys) {
 		return_val_if_fail(h != null, "{}");
 
@@ -28,7 +32,7 @@ namespace WebManager {
 				res = res.concat(",");
 			else
 				first = false;
-			res = res.concat("\"", key, "\":");
+			res = res.concat(json_normalize(key), ":");
 			Value? val = h.lookup(key);
 			if (val == null)
 				continue;
@@ -87,7 +91,7 @@ namespace WebManager {
 
 			last_msg.set_status(KnownStatusCode.OK);
 			string status_json = hashtable_to_json(status, ulong_keys, hex_ulong_keys);
-			last_msg.set_response("text/plain", Soup.MemoryUse.COPY, status_json, status_json.len());
+			last_msg.set_response("text/plain", Soup.MemoryUse.COPY, status_json, status_json.size());
 			last_msg = null;
 		}
 
@@ -139,19 +143,19 @@ namespace WebManager {
 			} catch (Error e) {
 				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
 				result = "Error listing files: %s".printf(e.message);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, result, result.len());
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, result, result.size());
 				return true;
 			}
 
 			result = result.concat("]");
-			msg.set_response("text/javascript", Soup.MemoryUse.COPY, result, result.len());
+			msg.set_response("text/javascript", Soup.MemoryUse.COPY, result, result.size());
 			return true;
 		}
 	}
 
 	class GPXItem : APIAction {
 		private void gpx_append(Soup.MessageBody body, string data) {
-			body.append(Soup.MemoryUse.COPY, data, data.len());
+			body.append(Soup.MemoryUse.COPY, data, data.size());
 		}
 
 		private void write_gpx(Soup.MessageBody body, DataInputStream stream) {
@@ -211,7 +215,7 @@ namespace WebManager {
 				// File not found, let the user know
 				msg.set_status(KnownStatusCode.NOT_FOUND);
 				var response = "File not found %s".printf(filename);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.size());
 				return true;
 			}
 
@@ -224,7 +228,7 @@ namespace WebManager {
 					debug("When loading content of file %s got etag %s size %lld", filename, etag, len);
 					assert(success);
 
-					msg.set_response("text/plain", Soup.MemoryUse.COPY, contents, contents.len());
+					msg.set_response("text/plain", Soup.MemoryUse.COPY, contents, contents.size());
 				} else {
 					var stream = new DataInputStream(f.read(null));
 					write_gpx(msg.response_body, stream);
@@ -235,7 +239,7 @@ namespace WebManager {
 			} catch (GLib.Error e) {
 				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
 				var response = "Internal server error: %s".printf(e.message);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.size());
 				return true;
 			}
 		}
@@ -251,22 +255,115 @@ namespace WebManager {
 				// File not found, let the user know
 				msg.set_status(KnownStatusCode.NOT_FOUND);
 				var response = "File not found %s".printf(filename);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.size());
 				return true;
 			}
 
 			try {
 				bool success = f.delete(null);
 				string contents = success.to_string();
-				msg.set_response("text/javascript", Soup.MemoryUse.COPY, contents, contents.len());
+				msg.set_response("text/javascript", Soup.MemoryUse.COPY, contents, contents.size());
 				msg.set_status(KnownStatusCode.OK);
 				return true;
 			} catch (GLib.Error e) {
 				msg.set_status(KnownStatusCode.INTERNAL_SERVER_ERROR);
 				var response = "Internal server error: %s".printf(e.message);
-				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.len());
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, response, response.size());
 				return true;
 			}
+		}
+	}
+
+	class ContactsList : APIAction {
+		private Soup.Message last_msg;
+		private Soup.Server last_server;
+		private dynamic DBus.Object contacts_bus;
+		private dynamic DBus.Object contacts_query;
+
+		construct {
+			try {
+				var dbus = DBus.Bus.get(DBus.BusType.SYSTEM);
+				this.contacts_bus = dbus.get_object("org.freesmartphone.opimd", "/org/freesmartphone/PIM/Contacts", "org.freesmartphone.PIM.Contacts");
+			} catch (DBus.Error e) {
+				debug("DBus error while getting interface: %s", e.message);
+			}
+		}
+
+		private void msg_resume(int code) {
+			last_msg.set_status(code);
+			last_server.unpause_message(last_msg);
+			last_msg = null;
+			last_server = null;
+		}
+
+		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			if (last_msg != null)
+				msg_resume(KnownStatusCode.REQUEST_TIMEOUT);
+
+			server.pause_message(msg);
+			last_server = server;
+			last_msg = msg;
+
+			HashTable<string, Value?> null_query = new HashTable<string, Value?>(str_hash, str_equal);
+			this.contacts_bus.Query(null_query, cb_query);
+			return true;
+		}
+
+		private void cb_query(string path, GLib.Error? e) {
+			if (e != null) {
+				debug("Error when getting query: %s", e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				return;
+			}
+
+			try {
+				var dbus = DBus.Bus.get(DBus.BusType.SYSTEM);
+				contacts_query = dbus.get_object("org.freesmartphone.opimd", path, "org.freesmartphone.PIM.ContactQuery");
+				this.contacts_query.GetResultCount(cb_query_count);
+			} catch (DBus.Error e) {
+				debug("DBus error while getting interface: %s", e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				return;
+			}
+		}
+
+		private void cb_query_count(int count, GLib.Error? e) {
+			if (e != null) {
+				debug("Error when getting query count: %s", e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				return;
+			}
+
+			this.contacts_query.GetMultipleResults(count, cb_query_result);
+		}
+
+		private void cb_query_result(HashTable<string, Value?>[] results, GLib.Error? e) {
+			if (e != null) {
+				debug("Error when getting query result: %s", e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+				return;
+			}
+
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, "[", 1);
+
+			List<string> dummy_list = new List<string>();
+			for (uint idx = 0; idx < results.length; idx++) {
+				string tmp = hashtable_to_json(results[idx], dummy_list, dummy_list);
+				if (idx > 0)
+					last_msg.response_body.append(Soup.MemoryUse.STATIC, ",\n", 2);
+				last_msg.response_body.append(Soup.MemoryUse.COPY, tmp, tmp.size());
+			}
+
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, "]", 1);
+			HashTable<string, string> p = new HashTable<string,string>(str_hash, str_equal);
+			p.insert("charset", "utf-8");
+			last_msg.response_headers.set_content_type("text/plain", p);
+			last_msg.set_status(KnownStatusCode.OK);
+			last_server.unpause_message(last_msg);
+			last_server = null;
+			last_msg = null;
+
+			this.contacts_query.Dispose();
 		}
 	}
 
@@ -278,6 +375,7 @@ namespace WebManager {
 			actions.insert("gsm/status", new GSMSignalStrength());
 			actions.insert("gpx/list", new GPXList());
 			actions.insert("gpx/item", new GPXItem());
+			actions.insert("contacts/list", new ContactsList());
 		}
 
 		public bool process_message(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query) {

@@ -49,6 +49,35 @@
 				)
 			}
 
+			function refreshContacts() {
+				$("#contacts").empty().text("Loading...");
+				$.getJSON("/api/1.0/contacts/list",
+				function(data){
+					var table = $("<table/>");
+					var tr = $("<tr/>");
+					tr.append($("<th/>").text("Name"));
+					tr.append($("<th/>").text("Surname"));
+					tr.append($("<th/>").text("Phone"));
+					tr.append($("<th/>").text("Mobile"));
+					table.append(tr);
+
+					if (data.length > 0) {
+						$.each(data, function(i,item) {
+							var line = $("<tr/>");
+							line.append($("<td/>").append(item.Name));
+							line.append($("<td/>").append(item.Surname));
+							line.append($("<td/>").append(item.Phone));
+							line.append($("<td/>").append(item.Cell_phone));
+							line.appendTo(table);
+						});
+					} else {
+						$("<tr/>").attr("rowspan", 4).text("No contacts.").appendTo(table);
+					}
+
+					$("#contacts").empty().append(table);
+					});
+			}
+
 			function init() {
 				$("ul.tabs").tabs("div.panes > div", {
 					onBeforeClick: function(event,  tabIndex) {
@@ -56,6 +85,8 @@
 							refreshALL();
 						} else if (tabIndex == 1) {
 							listGPX();
+						} else if (tabIndex == 2) {
+							refreshContacts();
 						}
 						return true;
 					}
@@ -73,6 +104,7 @@
 		<ul class="tabs">
 			<li><a href="#">Status</a></li>
 			<li><a href="#">GPX</a></li>
+			<li><a href="#">Contacts</a></li>
 		</ul>
 
 		<div class="panes">
@@ -92,6 +124,10 @@
 					<tbody id="gpx"><tr><td>Sample</td></tr></tbody>
 				</table>
 				<a href="#" onclick="listGPX(); return false;">Load GPX List</a>
+			</div>
+
+			<!-- Contacts tab -->
+			<div id="contacts">
 			</div>
 		</div>
 	</body>
