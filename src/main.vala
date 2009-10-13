@@ -44,6 +44,41 @@ namespace WebManager {
 			return KnownStatusCode.NOT_FOUND;
 		}
 
+		private int do_send_file(Soup.Message msg, string filepath) {
+                       File fileobj = File.new_for_path(filepath);
+                       string etag;
+                       try {
+                               FileInfo info = fileobj.query_info(FILE_ATTRIBUTE_ETAG_VALUE, FileQueryInfoFlags.NONE, null);
+                               etag = info.get_etag();
+
+                               if (etag != null && etag.len() > 0) {
+                                       string client_etag = msg.request_headers.get("If-None-Match");
+                                       if (client_etag != null && client_etag == etag)
+                                               return KnownStatusCode.NOT_MODIFIED;
+                               }
+
+                       } catch (GLib.Error e) {
+                               debug("Error when getting info on file %s: %s", fileobj.get_path(), e.message);
+                               return do_file_not_found(msg, filepath);
+                       }
+
+                       string content;
+                       size_t content_len;
+                       try {
+                               bool ret = fileobj.load_contents(null, out content, out content_len, null);
+                               assert(ret == true);
+                       } catch (GLib.Error e) {
+                               simple_html_response(msg, "Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(filepath, e.code, e.message));
+                               return KnownStatusCode.NOT_FOUND;
+                       }
+
+                       string mimetype = mimetype_for_file(filepath);
+                       if (etag != null && etag.len() > 0)
+                               msg.response_headers.append("ETag", etag);
+                       msg.set_response(mimetype, Soup.MemoryUse.COPY, content, content_len);
+                       return KnownStatusCode.OK;
+		}
+
 		private int do_default_handler(Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
 			string concat_path;
 			if (path.has_suffix("/")) {
@@ -55,23 +90,7 @@ namespace WebManager {
 				basepath = "/usr/share/web-manager/web/";
 			else
 				basepath = ".";
-			File fileobj = File.new_for_path(basepath.concat(path));
-			if (!fileobj.query_exists(null))
-				return do_file_not_found(msg, path);
-
-			string content;
-			size_t content_len;
-			try {
-				bool ret = fileobj.load_contents(null, out content, out content_len, null);
-				assert(ret == true);
-			} catch (GLib.Error e) {
-				simple_html_response(msg, "Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(path, e.code, e.message));
-				return KnownStatusCode.NOT_FOUND;
-			}
-
-			string mimetype = mimetype_for_file(path);
-			msg.set_response(mimetype, Soup.MemoryUse.COPY, content, content_len);
-			return KnownStatusCode.OK;
+			return do_send_file(msg, basepath.concat(path));
 		}
 
 		private void default_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
