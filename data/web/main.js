@@ -78,7 +78,10 @@ function cbMsgList(data) {
 	tableHeaders(table, ["Sender", "Content"]);
 	if (data.length > 0) {
 		try {
-			$.each(data, function(i,item){ tableData(table, [item.Sender, item.Content]); });
+			$.each(data, function(i,item){
+				tableData(table, [item.Sender, item.SMS_timestamp]);
+				tableData(table, [item.Content]);
+			});
 		} catch (err){
 		}
 	} else {
