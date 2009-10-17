@@ -51,9 +51,12 @@ namespace WebManager {
 		public virtual bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
 			return false;
 		}
+		public virtual bool act_put(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			return false;
+		}
 	}
 
-	abstract class DBusAPIAction : APIAction {
+	class DBusAPIAction : APIAction {
 		public Soup.Message last_msg;
 		public Soup.Server last_server;
 
@@ -75,13 +78,17 @@ namespace WebManager {
 			last_msg.response_body.append(Soup.MemoryUse.COPY, s, s.size());
 		}
 
-		public abstract void do_get(Soup.Message msg, GLib.HashTable<string, string>? query);
+		public virtual bool do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+			return false;
+		}
 
 		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
 			if (last_msg != null)
 				msg_resume(KnownStatusCode.REQUEST_TIMEOUT);
 
-			do_get(msg, query);
+			if (!do_get(msg, query))
+				return false;
+
 			last_msg = msg;
 			last_server = server;
 			server.pause_message(msg);
@@ -126,8 +133,9 @@ namespace WebManager {
 			msg_resume(KnownStatusCode.OK);
 		}
 
-		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+		public override bool do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			this.gsm_network_bus.GetStatus(cb_get_status);
+			return true;
 		}
 	}
 
@@ -302,15 +310,20 @@ namespace WebManager {
 		private static dynamic DBus.Object _contacts_bus;
 		public dynamic DBus.Object contacts_bus {get {return impl_get_dbus_obj(ref this._contacts_bus, "org.freesmartphone.opimd", "/org/freesmartphone/PIM/Contacts", "org.freesmartphone.PIM.Contacts");}}
 
-		private string message_query_last_path;
-		private dynamic DBus.Object message_query_last_obj;
-		public dynamic DBus.Object get_message_query_bus(string path) {
-			if (message_query_last_path != null && message_query_last_path == path) {
-				return message_query_last_obj;
+		private string bus_last_path;
+		private string bus_last_iface;
+		private dynamic DBus.Object bus_last_obj;
+		public dynamic DBus.Object get_bus(string iface, string path) {
+			if (bus_last_path != null && bus_last_path == path && bus_last_iface == iface) {
+				return bus_last_obj;
 			}
-			message_query_last_obj = null;
-			message_query_last_path = path;
-			return impl_get_dbus_obj(ref message_query_last_obj, "org.freesmartphone.opimd", path, "org.freesmartphone.PIM.MessageQuery");
+			bus_last_obj = null;
+			bus_last_path = path;
+			bus_last_iface = iface;
+			return impl_get_dbus_obj(ref this.bus_last_obj, "org.freesmartphone.opimd", path, iface);
+		}
+		public dynamic DBus.Object get_message_query_bus(string path) {
+			return get_bus("org.freesmartphone.PIM.MessageQuery", path);
 		}
 
 		public static HashTable<string, string> charset_params;
@@ -352,9 +365,10 @@ namespace WebManager {
 	class ContactsList : PimDBusAPIAction {
 		private dynamic DBus.Object contacts_query;
 
-		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+		public override bool do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			HashTable<string, Value?> null_query = new HashTable<string, Value?>(str_hash, str_equal);
 			this.contacts_bus.Query(null_query, cb_query);
+			return true;
 		}
 
 		private void cb_query(string path, GLib.Error? e) {
@@ -402,8 +416,9 @@ namespace WebManager {
 	}
 
 	class FoldersList : PimDBusAPIAction {
-		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+		public override bool do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			this.messages_bus.GetFolderNames(cb_names);
+			return true;
 		}
 
 		private void cb_names(string[] names, GLib.Error? e) {
@@ -428,9 +443,10 @@ namespace WebManager {
 	class MessagesQuery : PimDBusAPIAction {
 		private string last_path;
 
-		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+		public override bool do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			GLib.HashTable<string, Value?> h = new GLib.HashTable<string, Value?>(str_hash, str_equal);
 			this.messages_bus.Query(h, cb_query);
+			return true;
 		}
 
 		private void cb_query(string? path, GLib.Error? e) {
@@ -475,6 +491,44 @@ namespace WebManager {
 		}
 	}
 
+	class Message : PimDBusAPIAction {
+		private dynamic DBus.Object get_message_bus(string path) {
+			return get_bus("org.freesmartphone.PIM.Message", path);
+		}
+
+		private string? get_path(GLib.HashTable<string, string>? query) {
+			if (query == null)
+				return null;
+
+			string? path = query.lookup("path");
+			return path;
+		}
+
+		public override bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			string? path = get_path(query);
+			if (path != null) {
+				get_message_bus(path).Delete();
+				string status_json = "true";
+				msg.set_response("text/plain", Soup.MemoryUse.COPY, status_json, status_json.size());
+				msg.set_status(KnownStatusCode.OK);
+			} else
+				msg.set_status_full(KnownStatusCode.NOT_FOUND, "Missing path param");
+			return true;
+		}
+
+		public override bool act_put(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			string? path = get_path(query);
+			if (path != null) {
+				// TODO: Actually do something
+				// var data = new GLib.HashTable<string, Value?>(str_hash, str_equal);
+				// this.messages_bus.Add(data);
+				msg.set_status(KnownStatusCode.OK);
+			} else
+				msg.set_status_full(KnownStatusCode.NOT_FOUND, "Missing path param");
+			return true;
+		}
+	}
+
 	class RestAPI : Object {
 		HashTable<string, APIAction> actions;
 
@@ -486,6 +540,7 @@ namespace WebManager {
 			actions.insert("contacts/list", new ContactsList());
 			actions.insert("messages/folders", new FoldersList());
 			actions.insert("messages/list", new MessagesQuery());
+			actions.insert("message", new Message());
 		}
 
 		public bool process_message(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
@@ -497,6 +552,8 @@ namespace WebManager {
 					res = action.act_get(server, msg, query);
 				else if (msg.method == "DELETE")
 					res = action.act_delete(server, msg, query);
+				else if (msg.method == "PUT")
+					res = action.act_put(server, msg, query);
 				else {
 					// Unknown method
 					msg.set_status(KnownStatusCode.METHOD_NOT_ALLOWED);

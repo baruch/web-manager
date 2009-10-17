@@ -73,12 +73,24 @@ function refreshContacts() {
 			});
 }
 
+function deleteMSG(item) {
+	$.ajax({
+		type: "DELETE",
+		url: "/api/1.0/message?path="+item.data,
+		dataType: "json",
+		success: function(data){refreshMessages();}
+	});
+	return false;
+}
+
 function cbMsgList(data) {
 	var div = $("<div/>").attr("id", "accordion");
 	if (data.length > 0) {
 		$.each(data, function(i,item){
 			if ('Content' in item && 'Sender' in item && 'SMS_timestamp' in item) {
-				$("<h2/>").text(item.Sender + " | " + item.SMS_timestamp).appendTo(div);
+				$("<h2/>").text(item.Sender + " | " + item.SMS_timestamp + " | ")
+					  .append($("<span/>").append($("<a/>").attr("href", "#").bind("click", item.Path, deleteMSG).text('Delete')))
+				          .appendTo(div);
 				$("<div/>").attr("class", "pane").text(item.Content).appendTo(div);
 			}
 		});
