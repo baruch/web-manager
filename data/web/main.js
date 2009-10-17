@@ -74,20 +74,19 @@ function refreshContacts() {
 }
 
 function cbMsgList(data) {
-	var table = $("<table/>");
-	tableHeaders(table, ["Sender", "Content"]);
+	var div = $("<div/>").attr("id", "accordion");
 	if (data.length > 0) {
-		try {
-			$.each(data, function(i,item){
-				tableData(table, [item.Sender, item.SMS_timestamp]);
-				tableData(table, [item.Content]);
-			});
-		} catch (err){
-		}
+		$.each(data, function(i,item){
+			if ('Content' in item && 'Sender' in item && 'SMS_timestamp' in item) {
+				$("<h2/>").text(item.Sender + " | " + item.SMS_timestamp).appendTo(div);
+				$("<div/>").attr("class", "pane").text(item.Content).appendTo(div);
+			}
+		});
 	} else {
-		$("<tr/>").attr("rowspan", 2).text("No messages.").appendTo(table);
+		$("<span/>").text("No messages.").appendTo(div);
 	}
-	$("#messages").empty().append(table);
+	$("#messages").empty().append(div);
+	div.tabs("#accordion div.pane", {tabs: 'h2', effect: 'slide', initialIndex: null});
 }
 function refreshMessages() {
 	$("#messages").empty().text("Loading...");

@@ -77,7 +77,7 @@ div.panes div.pane {
 }
 
 /* tab pane styling */
-div.panes div {
+div.panes > div {
 	display:none;		
 	padding:15px 10px;
 	border:1px solid #999;
