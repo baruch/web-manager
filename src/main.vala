@@ -18,7 +18,7 @@ using Soup;
 namespace WebManager {
 	public bool dev;
 	
-	class Deamon {
+	class Deamon : Object {
 		DataOutputStream log_stream;
 		Soup.Server server;
 		RestAPI api;
@@ -44,42 +44,53 @@ namespace WebManager {
 			return KnownStatusCode.NOT_FOUND;
 		}
 
-		private int do_send_file(Soup.Message msg, string filepath) {
+		private void unpause_msg(Soup.Server server, Soup.Message msg, int code) {
+			msg.set_status(code);
+			server.unpause_message(msg);
+		}
+
+		private async bool do_send_file(Soup.Server server, Soup.Message msg, string filepath) {
+			server.pause_message(msg);
                        File fileobj = File.new_for_path(filepath);
                        string etag;
                        try {
-                               FileInfo info = fileobj.query_info(FILE_ATTRIBUTE_ETAG_VALUE, FileQueryInfoFlags.NONE, null);
+                               FileInfo info = yield fileobj.query_info_async(FILE_ATTRIBUTE_ETAG_VALUE, FileQueryInfoFlags.NONE, Priority.DEFAULT, null);
                                etag = info.get_etag();
 
                                if (etag != null && etag.len() > 0) {
                                        string client_etag = msg.request_headers.get("If-None-Match");
-                                       if (client_etag != null && client_etag == etag)
-                                               return KnownStatusCode.NOT_MODIFIED;
+                                       if (client_etag != null && client_etag == etag) {
+					       unpause_msg(server, msg, KnownStatusCode.NOT_MODIFIED);
+					       return false;
+				       }
                                }
 
-                       } catch (GLib.Error e) {
-                               debug("Error when getting info on file %s: %s", fileobj.get_path(), e.message);
-                               return do_file_not_found(msg, filepath);
+                       } catch (GLib.Error e1) {
+                               debug("Error when getting info on file %s: %s", fileobj.get_path(), e1.message);
+                               unpause_msg(server, msg, do_file_not_found(msg, filepath));
+			       return false;
                        }
 
                        string content;
                        size_t content_len;
                        try {
-                               bool ret = fileobj.load_contents(null, out content, out content_len, null);
+                               bool ret = yield fileobj.load_contents_async(null, out content, out content_len, null);
                                assert(ret == true);
-                       } catch (GLib.Error e) {
-                               simple_html_response(msg, "Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(filepath, e.code, e.message));
-                               return KnownStatusCode.NOT_FOUND;
+                       } catch (GLib.Error e2) {
+                               simple_html_response(msg, "Error loading file", "Failed to load file %s, errno: %d, msg: %s".printf(filepath, e2.code, e2.message));
+                               unpause_msg(server, msg, KnownStatusCode.NOT_FOUND);
+			       return false;
                        }
 
                        string mimetype = mimetype_for_file(filepath);
                        if (etag != null && etag.len() > 0)
                                msg.response_headers.append("ETag", etag);
                        msg.set_response(mimetype, Soup.MemoryUse.COPY, content, content_len);
-                       return KnownStatusCode.OK;
+                       unpause_msg(server, msg, KnownStatusCode.OK);
+		       return false;
 		}
 
-		private int do_default_handler(Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
+		private void default_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
 			string concat_path;
 			if (path.has_suffix("/")) {
 				concat_path = path.concat("index.html");
@@ -90,11 +101,7 @@ namespace WebManager {
 				basepath = "/usr/share/web-manager/web/";
 			else
 				basepath = ".";
-			return do_send_file(msg, basepath.concat(path));
-		}
-
-		private void default_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
-			msg.set_status(do_default_handler(msg, path, query));
+			do_send_file(server, msg, basepath.concat(path));
 		}
 
 		private void api_1_handler(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query, Soup.ClientContext client) {
