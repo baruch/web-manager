@@ -85,6 +85,7 @@ function deleteMSG(item) {
 
 function cbMsgList(data) {
 	var div = $("<div/>").attr("id", "accordion");
+	var found = false;
 	if (data.length > 0) {
 		$.each(data, function(i,item){
 			if ('Content' in item && 'Sender' in item && 'SMS_timestamp' in item) {
@@ -92,13 +93,15 @@ function cbMsgList(data) {
 					  .append($("<span/>").append($("<a/>").attr("href", "#").bind("click", item.Path, deleteMSG).text('Delete')))
 				          .appendTo(div);
 				$("<div/>").attr("class", "pane").text(item.Content).appendTo(div);
+				found = true;
 			}
 		});
-	} else {
-		$("<span/>").text("No messages.").appendTo(div);
+		$("#messages").empty().append(div);
+		div.tabs("#accordion div.pane", {tabs: 'h2', effect: 'slide', initialIndex: null});
 	}
-	$("#messages").empty().append(div);
-	div.tabs("#accordion div.pane", {tabs: 'h2', effect: 'slide', initialIndex: null});
+	if (!found) {
+		$("<span/>").text("No messages.").appendTo($("#messages"));
+	}
 }
 function refreshMessages() {
 	$("#messages").empty().text("Loading...");
