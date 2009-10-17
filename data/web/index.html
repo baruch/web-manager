@@ -80,6 +80,24 @@
 					});
 			}
 
+			function cbMsgList(data) {
+				var table = $("<table/>");
+				tableHeaders(table, ["Sender", "Content"]);
+				if (data.length > 0) {
+					try {
+						$.each(data, function(i,item){ tableData(table, [item.Sender, item.Content]); });
+					} catch (err){
+					}
+				} else {
+					$("<tr/>").attr("rowspan", 2).text("No messages.").appendTo(table);
+				}
+				$("#messages").empty().append(table);
+			}
+			function refreshMessages() {
+				$("#messages").empty().text("Loading...");
+				$.getJSON("/api/1.0/messages/list", cbMsgList);
+			}
+
 			function init() {
 				$("ul.tabs").tabs("div.panes > div", {
 					onBeforeClick: function(event,  tabIndex) {
@@ -89,6 +107,8 @@
 							listGPX();
 						} else if (tabIndex == 2) {
 							refreshContacts();
+						} else if (tabIndex == 3) {
+							refreshMessages();
 						}
 						return true;
 					}
@@ -107,6 +127,7 @@
 			<li><a href="#">Status</a></li>
 			<li><a href="#">GPX</a></li>
 			<li><a href="#">Contacts</a></li>
+			<li><a href="#">Messages</a></li>
 		</ul>
 
 		<div class="panes">
@@ -130,6 +151,10 @@
 
 			<!-- Contacts tab -->
 			<div id="contacts">
+			</div>
+
+			<!-- Messages tab -->
+			<div id="messages">
 			</div>
 		</div>
 	</body>

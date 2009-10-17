@@ -53,10 +53,44 @@ namespace WebManager {
 		}
 	}
 
-	class GSMSignalStrength : APIAction {
+	abstract class DBusAPIAction : APIAction {
+		public Soup.Message last_msg;
+		public Soup.Server last_server;
+
+		public void msg_resume(int code, string? status_desc = null) {
+			if (status_desc != null)
+				last_msg.set_status_full(code, status_desc);
+			else
+				last_msg.set_status(code);
+			last_server.unpause_message(last_msg);
+			last_msg = null;
+			last_server = null;
+		}
+
+		public void msg_append_static(string s) {
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, s, s.size());
+		}
+
+		public void msg_append(string s) {
+			last_msg.response_body.append(Soup.MemoryUse.COPY, s, s.size());
+		}
+
+		public abstract void do_get(Soup.Message msg, GLib.HashTable<string, string>? query);
+
+		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			if (last_msg != null)
+				msg_resume(KnownStatusCode.REQUEST_TIMEOUT);
+
+			do_get(msg, query);
+			last_msg = msg;
+			last_server = server;
+			server.pause_message(msg);
+			return true;
+		}
+	}
+
+	class GSMSignalStrength : DBusAPIAction {
 		private dynamic DBus.Object gsm_network_bus;
-		private Soup.Message? last_msg;
-		private weak Soup.Server? last_server;
 
 		static List<string> ulong_keys;
 		static List<string> hex_ulong_keys;
@@ -82,31 +116,18 @@ namespace WebManager {
 		}
 
 		private void cb_get_status(HashTable<string, Value?> status, GLib.Error? e) {
-			last_server.unpause_message(last_msg);
-
 			if (e != null) {
-				last_msg.set_status_full(KnownStatusCode.INTERNAL_SERVER_ERROR, e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR, e.message);
 				return;
 			}
 
-			last_msg.set_status(KnownStatusCode.OK);
 			string status_json = hashtable_to_json(status, ulong_keys, hex_ulong_keys);
 			last_msg.set_response("text/plain", Soup.MemoryUse.COPY, status_json, status_json.size());
-			last_msg = null;
+			msg_resume(KnownStatusCode.OK);
 		}
 
-		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
-			if (last_msg != null) {
-				msg.set_status(KnownStatusCode.REQUEST_TIMEOUT);
-				server.unpause_message(last_msg);
-				last_msg = null;
-			}
-
+		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			this.gsm_network_bus.GetStatus(cb_get_status);
-			server.pause_message(msg);
-			last_msg = msg;
-			last_server = server;
-			return true;
 		}
 	}
 
@@ -274,47 +295,71 @@ namespace WebManager {
 		}
 	}
 
-	class ContactsList : APIAction {
-		private Soup.Message last_msg;
-		private Soup.Server last_server;
-		private dynamic DBus.Object contacts_bus;
-		private dynamic DBus.Object contacts_query;
+	abstract class PimDBusAPIAction : DBusAPIAction {
+		private static dynamic DBus.Object _messages_bus;
+		public dynamic DBus.Object messages_bus { get {return impl_get_dbus_obj(ref this._messages_bus, "org.freesmartphone.opimd", "/org/freesmartphone/PIM/Messages", "org.freesmartphone.PIM.Messages");}}
 
+		private static dynamic DBus.Object _contacts_bus;
+		public dynamic DBus.Object contacts_bus {get {return impl_get_dbus_obj(ref this._contacts_bus, "org.freesmartphone.opimd", "/org/freesmartphone/PIM/Contacts", "org.freesmartphone.PIM.Contacts");}}
+
+		private string message_query_last_path;
+		private dynamic DBus.Object message_query_last_obj;
+		public dynamic DBus.Object get_message_query_bus(string path) {
+			if (message_query_last_path != null && message_query_last_path == path) {
+				return message_query_last_obj;
+			}
+			message_query_last_obj = null;
+			message_query_last_path = path;
+			return impl_get_dbus_obj(ref message_query_last_obj, "org.freesmartphone.opimd", path, "org.freesmartphone.PIM.MessageQuery");
+		}
+
+		public static HashTable<string, string> charset_params;
 		construct {
+			if (charset_params == null) {
+				charset_params = new HashTable<string,string>(str_hash, str_equal);
+				charset_params.insert("charset", "utf-8");
+			}
+		}
+
+		public void set_json_reply() {
+			last_msg.response_headers.set_content_type("text/plain", charset_params);
+			msg_resume(KnownStatusCode.OK);
+		}
+
+		private unowned DBus.Object? impl_get_dbus_obj(ref dynamic DBus.Object obj, string server, string path, string iface) {
+			if (obj != null)
+				return obj;
+
 			try {
 				var dbus = DBus.Bus.get(DBus.BusType.SYSTEM);
-				this.contacts_bus = dbus.get_object("org.freesmartphone.opimd", "/org/freesmartphone/PIM/Contacts", "org.freesmartphone.PIM.Contacts");
+				obj = dbus.get_object(server, path, iface);
 			} catch (DBus.Error e) {
 				debug("DBus error while getting interface: %s", e.message);
 			}
+			return obj;
 		}
 
-		private void msg_resume(int code) {
-			last_msg.set_status(code);
-			last_server.unpause_message(last_msg);
-			last_msg = null;
-			last_server = null;
+		public bool glib_error(GLib.Error? e) {
+			if (e != null) {
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR, e.message);
+				return true;
+			}
+
+			return false;
 		}
+	}
 
-		public override bool act_get(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
-			if (last_msg != null)
-				msg_resume(KnownStatusCode.REQUEST_TIMEOUT);
+	class ContactsList : PimDBusAPIAction {
+		private dynamic DBus.Object contacts_query;
 
-			server.pause_message(msg);
-			last_server = server;
-			last_msg = msg;
-
+		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
 			HashTable<string, Value?> null_query = new HashTable<string, Value?>(str_hash, str_equal);
 			this.contacts_bus.Query(null_query, cb_query);
-			return true;
 		}
 
 		private void cb_query(string path, GLib.Error? e) {
-			if (e != null) {
-				debug("Error when getting query: %s", e.message);
-				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+			if (glib_error(e))
 				return;
-			}
 
 			try {
 				var dbus = DBus.Bus.get(DBus.BusType.SYSTEM);
@@ -328,21 +373,15 @@ namespace WebManager {
 		}
 
 		private void cb_query_count(int count, GLib.Error? e) {
-			if (e != null) {
-				debug("Error when getting query count: %s", e.message);
-				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+			if (glib_error(e))
 				return;
-			}
 
 			this.contacts_query.GetMultipleResults(count, cb_query_result);
 		}
 
 		private void cb_query_result(HashTable<string, Value?>[] results, GLib.Error? e) {
-			if (e != null) {
-				debug("Error when getting query result: %s", e.message);
-				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR);
+			if (glib_error(e))
 				return;
-			}
 
 			last_msg.response_body.append(Soup.MemoryUse.STATIC, "[", 1);
 
@@ -355,15 +394,84 @@ namespace WebManager {
 			}
 
 			last_msg.response_body.append(Soup.MemoryUse.STATIC, "]", 1);
-			HashTable<string, string> p = new HashTable<string,string>(str_hash, str_equal);
-			p.insert("charset", "utf-8");
-			last_msg.response_headers.set_content_type("text/plain", p);
-			last_msg.set_status(KnownStatusCode.OK);
-			last_server.unpause_message(last_msg);
-			last_server = null;
-			last_msg = null;
+			set_json_reply();
 
 			this.contacts_query.Dispose();
+			this.contacts_query = null;
+		}
+	}
+
+	class FoldersList : PimDBusAPIAction {
+		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+			this.messages_bus.GetFolderNames(cb_names);
+		}
+
+		private void cb_names(string[] names, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			msg_append_static("[");
+
+			for (uint idx = 0; idx < names.length; idx++) {
+				if (idx > 0)
+					msg_append_static(",\n");
+				msg_append_static("\"");
+				msg_append(names[idx]);
+				msg_append_static("\"");
+			}
+			msg_append_static("]");
+
+			set_json_reply();
+		}
+	}
+
+	class MessagesQuery : PimDBusAPIAction {
+		private string last_path;
+
+		public override void do_get(Soup.Message msg, GLib.HashTable<string, string>? query) {
+			GLib.HashTable<string, Value?> h = new GLib.HashTable<string, Value?>(str_hash, str_equal);
+			this.messages_bus.Query(h, cb_query);
+		}
+
+		private void cb_query(string? path, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			if (path == null) {
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR, "no path received");
+				return;
+			}
+
+			this.last_path = path;
+			get_message_query_bus(path).GetResultCount(cb_count);
+		}
+
+		private void cb_count(int count, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			debug("got count %d", count);
+			get_message_query_bus(this.last_path).GetMultipleResults(count, cb_results);
+		}
+
+		private void cb_results(GLib.HashTable<string, Value?>[] results, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, "[", 1);
+			List<string> dummy_list = new List<string>();
+			for (uint idx = 0; idx < results.length; idx++) {
+				string tmp = hashtable_to_json(results[idx], dummy_list, dummy_list);
+				if (idx > 0)
+					last_msg.response_body.append(Soup.MemoryUse.STATIC, ",\n", 2);
+				last_msg.response_body.append(Soup.MemoryUse.COPY, tmp, tmp.size());
+			}
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, "]", 1);
+
+			set_json_reply();
+
+			get_message_query_bus(this.last_path).Dispose();
+			this.last_path = null;
 		}
 	}
 
@@ -376,6 +484,8 @@ namespace WebManager {
 			actions.insert("gpx/list", new GPXList());
 			actions.insert("gpx/item", new GPXItem());
 			actions.insert("contacts/list", new ContactsList());
+			actions.insert("messages/folders", new FoldersList());
+			actions.insert("messages/list", new MessagesQuery());
 		}
 
 		public bool process_message(Soup.Server server, Soup.Message msg, string path, GLib.HashTable<string, string>? query) {
