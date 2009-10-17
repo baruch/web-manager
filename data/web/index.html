@@ -49,26 +49,28 @@
 				)
 			}
 
+			function tableItems(table, texts, tag) {
+				var tr = $("<tr/>");
+				$.each(texts, function(i,item) { tr.append($(tag).text(item)); });
+				table.append(tr);
+			}
+			function tableHeaders(table, texts) {
+				tableItems(table, texts, "<th/>");
+			}
+
+			function tableData(table, texts) {
+				tableItems(table, texts, "<td/>");
+			}
 			function refreshContacts() {
 				$("#contacts").empty().text("Loading...");
 				$.getJSON("/api/1.0/contacts/list",
 				function(data){
 					var table = $("<table/>");
-					var tr = $("<tr/>");
-					tr.append($("<th/>").text("Name"));
-					tr.append($("<th/>").text("Surname"));
-					tr.append($("<th/>").text("Phone"));
-					tr.append($("<th/>").text("Mobile"));
-					table.append(tr);
+					tableHeaders(table, ["Name", "Surname", "Phone", "Mobile"]);
 
 					if (data.length > 0) {
 						$.each(data, function(i,item) {
-							var line = $("<tr/>");
-							line.append($("<td/>").append(item.Name));
-							line.append($("<td/>").append(item.Surname));
-							line.append($("<td/>").append(item.Phone));
-							line.append($("<td/>").append(item.Cell_phone));
-							line.appendTo(table);
+							tableData(table, [item.Name, item.Surname, item.Phone, item.Cell_phone]);
 						});
 					} else {
 						$("<tr/>").attr("rowspan", 4).text("No contacts.").appendTo(table);
