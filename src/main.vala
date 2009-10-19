@@ -134,12 +134,12 @@ namespace WebManager {
 		}
 
 		private void init_log() {
+			if (dev)
+				return;
+
 			try {
 				string logfile;
-				if (!dev)
-					logfile = "/var/log/web-manager.log";
-				else
-					logfile = "/var/log/web-manager-dev.log";
+				logfile = "/var/log/web-manager.log";
 				var log_file_stream = File.new_for_path(logfile).append_to(FileCreateFlags.NONE, null);
 				this.log_stream = new DataOutputStream(log_file_stream);
 
