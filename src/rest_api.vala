@@ -51,7 +51,7 @@ namespace WebManager {
 		public virtual bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
 			return false;
 		}
-		public virtual bool act_put(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+		public virtual bool act_post(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
 			return false;
 		}
 	}
@@ -310,6 +310,9 @@ namespace WebManager {
 		private static dynamic DBus.Object _contacts_bus;
 		public dynamic DBus.Object contacts_bus {get {return impl_get_dbus_obj(ref this._contacts_bus, "org.freesmartphone.opimd", "/org/freesmartphone/PIM/Contacts", "org.freesmartphone.PIM.Contacts");}}
 
+		private static dynamic DBus.Object _gsm_sms_bus;
+		public dynamic DBus.Object gsm_sms_bus {get {return impl_get_dbus_obj(ref this._gsm_sms_bus, "org.freesmartphone.ogsmd", "/org/freesmartphone/GSM/Device", "org.freesmartphone.GSM.SMS");}}
+
 		private string bus_last_path;
 		private string bus_last_iface;
 		private dynamic DBus.Object bus_last_obj;
@@ -354,7 +357,8 @@ namespace WebManager {
 
 		public bool glib_error(GLib.Error? e) {
 			if (e != null) {
-				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR, e.message);
+				debug("error: %d:%s", e.code, e.message);
+				msg_resume(KnownStatusCode.INTERNAL_SERVER_ERROR, "Error: " + e.message);
 				return true;
 			}
 
@@ -496,16 +500,15 @@ namespace WebManager {
 			return get_bus("org.freesmartphone.PIM.Message", path);
 		}
 
-		private string? get_path(GLib.HashTable<string, string>? query) {
+		private string? get_query(GLib.HashTable<string, string>? query, string key) {
 			if (query == null)
 				return null;
 
-			string? path = query.lookup("path");
-			return path;
+			return query.lookup(key);
 		}
 
 		public override bool act_delete(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
-			string? path = get_path(query);
+			string? path = get_query(query, "path");
 			if (path != null) {
 				get_message_bus(path).Delete();
 				string status_json = "true";
@@ -516,16 +519,78 @@ namespace WebManager {
 			return true;
 		}
 
-		public override bool act_put(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
-			string? path = get_path(query);
-			if (path != null) {
-				// TODO: Actually do something
-				// var data = new GLib.HashTable<string, Value?>(str_hash, str_equal);
-				// this.messages_bus.Add(data);
-				msg.set_status(KnownStatusCode.OK);
-			} else
-				msg.set_status_full(KnownStatusCode.NOT_FOUND, "Missing path param");
+		void hash_insert_val_str(GLib.HashTable<string, Value?> hash, string key, string val) {
+			var v = Value(typeof(string));
+			v.set_string(val);
+			hash.insert(key, v);
+		}
+
+		void hash_insert_val_int(GLib.HashTable<string, Value?> hash, string key, int val) {
+			var v = Value(typeof(int));
+			v.set_int(val);
+			hash.insert(key, v);
+		}
+
+		string last_content;
+		string last_phone;
+		public override bool act_post(Soup.Server server, Soup.Message msg, GLib.HashTable<string, string>? query) {
+			debug("body: %lld,%s", msg.request_body.length, msg.request_body.data);
+			var form = (GLib.HashTable<string,string>)Soup.form_decode(msg.request_body.data);
+
+			var phone = form.lookup("phone");
+			var content = form.lookup("content");
+
+			var timestamp = Time.gm(time_t()).to_string();
+			var timezone = "UTC";
+
+			var data = new GLib.HashTable<string, Value?>(str_hash, str_equal);
+			hash_insert_val_str(data, "Direction", "out");
+			hash_insert_val_str(data, "Folder", "SMS");
+			hash_insert_val_str(data, "Source", "SMS");
+			hash_insert_val_int(data, "MessageSent", 0);
+			hash_insert_val_int(data, "Processing", 1);
+			hash_insert_val_str(data, "Recipient", phone);
+			hash_insert_val_str(data, "Content", content);
+			hash_insert_val_str(data, "Timestamp", timestamp);
+			hash_insert_val_str(data, "Timezone", timezone);
+			debug("Adding message to pim db: phone=%s timezone=%s timestamp='%s' content='%s'", phone, timezone, timestamp, content);
+			this.messages_bus.Add(data, cb_msg_store);
+			server.pause_message(msg);
+			last_content = content;
+			last_phone = phone;
+			this.last_server = server;
+			this.last_msg = msg;
 			return true;
+		}
+
+		string last_path;
+		private void cb_msg_store(string path, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			var data = new GLib.HashTable<string, Value?>(str_hash, str_equal);
+			//hash_insert_val_str(data, "alphabet", "ucs2"); // DOCS say usc2 but name is officialy ucs2
+			//data.insert("status-report-request", true);
+			//data.inserT("message-reference", random_int);
+			debug("Send SMS to phone=%s content='%s'", this.last_phone, this.last_content);
+			this.gsm_sms_bus.SendMessage(this.last_phone, this.last_content, data, cb_msg_sent);
+			last_path = path;
+		}
+
+		private void cb_msg_sent(int transaction_index, string timestamp, GLib.Error? e) {
+			if (glib_error(e))
+				return;
+
+			var data = new GLib.HashTable<string, Value?>(str_hash, str_equal);
+			data.insert("Processing", 0);
+			data.insert("MessageSent", 1);
+			data.insert("SMS-message-reference", transaction_index);
+			data.insert("SMS-SMSC-timestamp", timestamp);
+			debug("Update pim message path=%s timestamp='%s' transaction=%d", this.last_path, timestamp, transaction_index);
+			this.get_message_bus(last_path).Update(data);
+
+			last_msg.response_body.append(Soup.MemoryUse.STATIC, "true", 4);
+			set_json_reply();
 		}
 	}
 
@@ -552,8 +617,8 @@ namespace WebManager {
 					res = action.act_get(server, msg, query);
 				else if (msg.method == "DELETE")
 					res = action.act_delete(server, msg, query);
-				else if (msg.method == "PUT")
-					res = action.act_put(server, msg, query);
+				else if (msg.method == "POST")
+					res = action.act_post(server, msg, query);
 				else {
 					// Unknown method
 					msg.set_status(KnownStatusCode.METHOD_NOT_ALLOWED);

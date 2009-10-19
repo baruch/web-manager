@@ -108,6 +108,10 @@ function refreshMessages() {
 	$.getJSON("/api/1.0/messages/list", cbMsgList);
 }
 
+function sendSMS() {
+	alert("Phone: " + document.smsform.phone.value + "\nContent: " + document.smsform.content.value);
+}
+
 function init() {
 	$("ul.tabs").tabs("div.panes > div", {
 		onBeforeClick: function(event,  tabIndex) {

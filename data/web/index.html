@@ -42,7 +42,14 @@
 			</div>
 
 			<!-- Messages tab -->
-			<div id="messages">
+			<div><div id="messages"></div>
+				<span>
+					<form name="smsform" method="POST" action="/api/1.0/message">
+						<input type="text" name="phone"/>
+						<textarea name="content"></textarea>
+						<input type="submit"/>
+					</form>
+				</span>
 			</div>
 		</div>
 	</body>
